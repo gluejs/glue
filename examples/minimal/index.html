@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+	<title>Glue minimal example</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<meta name="referrer" content="no-referrer">
+
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.5.2/css/bulma.min.css" integrity="sha256-d+mgRrjtsPCjrT7ltuB1sZ2VybUn1Xgdf8piVG/Va/k=" crossorigin="anonymous" />
+	<link rel="stylesheet" href="minimal.css" />
+</head>
+<body>
+<div id="app" v-cloak>
+
+<section class="hero is-warning">
+	<div class="hero-body">
+		<div class="container">
+			<h1 class="title">
+				Glue minimal example
+			</h1>
+			<h2 class="subtitle">
+				This is a simple web app to test Glue.
+			</h2>
+		</div>
+	</div>
+</section>
+
+<section id="main" ref="main">
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.4.2/vue.min.js" integrity="sha256-Gs0UYwrz/B58FsQggzU+vvCSyG/pewemP4Lssjzv8Ho=" crossorigin="anonymous"></script>
+<script src="../../umd/glue.js" crossorigin="anonymous"></script>
+<script src="minimal.js"></script>
+
+</div> <!-- id=app -->
+</body>
+</html>

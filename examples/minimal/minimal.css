@@ -1,0 +1,23 @@
+html, body {
+	height: 100%;
+	overflow: auto;
+}
+
+[v-cloak] {
+	display: none;
+}
+
+#app {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+#main {
+	display: flex;
+	flex: 1;
+}
+
+iframe.app {
+	flex: 1;
+}

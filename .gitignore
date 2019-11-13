@@ -1,0 +1,22 @@
+/node_modules
+/dist
+/umd
+/docs
+/.version
+/NOTICES.txt
+npm-debug.log*                                                                  
+yarn-debug.log*                                                                 
+yarn-error.log*
+/.yarninstall
+/.vscode
+
+# vim
+*.swp
+
+# misc
+.DS_Store
+.env.local
+.eslintcache
+
+# testing
+/test

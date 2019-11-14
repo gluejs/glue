@@ -11,3 +11,15 @@ export function getOriginFromUrl(url: string): string {
 	a.href = url;
 	return a.origin;
 }
+
+export const queueMicroTask = (() => {
+	if (typeof window.queueMicrotask !== 'function') {
+		return function(callback: () => void) {
+			Promise.resolve().then(callback).catch(e => setTimeout(() => {
+				throw e;
+			}));
+		};
+	} else {
+		return window.queueMicrotask.bind(window);
+	}
+})();

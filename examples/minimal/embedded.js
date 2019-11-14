@@ -1,3 +1,7 @@
+/* eslint-env browser */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* global Glue */
+
 'use strict';
 
 console.info('embedded.js start', window.parent);

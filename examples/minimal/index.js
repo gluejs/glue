@@ -1,3 +1,7 @@
+/* eslint-env browser */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* global Vue, Glue */
+
 'use strict';
 
 console.log('minimal.js start');

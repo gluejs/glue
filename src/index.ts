@@ -54,10 +54,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 	const origin = options && options.origin ? options.origin : getOriginFromUrl(url);
 	const features = options ? options.features : {};
 	const state: {features?: Array<string>} = {};
-	return new Glue({
+	const glue = new Glue({
 		glueWindow: frame.contentWindow,
 		origin,
-		handler: async (glue: Glue, message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 			switch (message.type) {
 				case 'init': {
 					const data = message.data as IInitData;
@@ -81,7 +81,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						if (state.features) {
 							state.features.forEach(action => {
 								api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-									return glue.callFeature(action, args);
+									return glue.callAction(action, args);
 								}
 							});
 						}
@@ -106,6 +106,8 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			}
 		},
 	});
+
+	return glue;
 }
 
 /**
@@ -123,7 +125,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 	const glue = new Glue({
 		glueWindow: sourceWindow,
 		origin: options ? options.origin : undefined,
-		handler: async (glue: Glue, message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 			switch (message.type) {
 				case 'call': {
 					const data = message.data as ICallData;
@@ -178,7 +180,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					if (initData.features) {
 						for (const action of initData.features) {
 							api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-								return glue.callFeature(action, args);
+								return glue.callAction(action, args);
 							}
 						}
 					}

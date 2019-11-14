@@ -4,24 +4,23 @@
 
 'use strict';
 
-console.info('embedded.js start', window.parent);
+console.info('embedded start', window.parent);
 
-(async () => {
-	const glue = await Glue.enable(window.parent, {
-		features: {
-			embeddedFeature1: () => {
-				console.log('embedded.js embeddedFeature1 triggered');
-				return {
-					some: 'result',
-				};
-			},
-			someOtherThing: (...args) => {
-				console.log('embedded.js someOtherThing triggered', args);
-			},
+Glue.enable(window.parent, {
+	features: {
+		embeddedFeature1: () => {
+			console.log('embedded embeddedFeature1 triggered');
+			return {
+				some: 'result',
+			};
 		},
-		onReady: (readyData, api) => {
-			console.info('embedded.js glue is ready', readyData, api);
+		someOtherThing: (...args) => {
+			console.log('embedded someOtherThing triggered', args);
 		},
-	});
-	console.log('embedded.js created glue', glue);
-})();
+	},
+	onReady: (readyData, api) => {
+		console.info('embedded glue is ready', readyData, api);
+	},
+}).then(glue => {
+	console.log('embedded created glue', glue);
+});

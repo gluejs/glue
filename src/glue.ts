@@ -75,12 +75,10 @@ export class Glue {
 	private window: Window;
 	private origin: string;
 
-	private initialized = false;
-
 	private callbackCounter: number;
 	private callbackTable: Map<string, ICallbackRecord>;
 
-	private handler?: (glue: Glue, message: IPayload) => Promise<any>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	private handler?: (message: IPayload) => Promise<any>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
 	public constructor(
 		{
@@ -90,7 +88,7 @@ export class Glue {
 		}: {
 			glueWindow: Window;
 			origin?: string;
-			handler?: (glue: Glue, message: IPayload) => Promise<unknown>;
+			handler?: (message: IPayload) => Promise<unknown>;
 		}) {
 		this.window = glueWindow;
 		this.origin = origin ? origin : window.origin;
@@ -125,23 +123,23 @@ export class Glue {
 
 	public receiveMessage = (event: MessageEvent): void => {
 		if (event.source !== this.window) {
-			console.debug('glue receive message from wrong source', event.source, this.window);
 			return;
 		}
 		if (event.origin !== this.origin) {
-			console.debug('glue receive message from wrong origin', event.origin, this.origin);
 			return;
 		}
 		const message = event.data as IPayload;
 		if (message.glue !== true || message.v === undefined || message.type === undefined) {
-			console.debug('glue receive message not glue payload', event.data);
 			return;
+		}
+		if (message.v > API_VERSION) {
+			throw new Error(`glue versions incompatible: ${message.v} != ${API_VERSION}`);
 		}
 
 		this.handleMessage(message);
 	}
 
-	public callFeature = async (action: string, args: unknown[]): Promise<unknown> => {
+	public callAction = async (action: string, args: unknown[]): Promise<unknown> => {
 		const message: ICallData = {
 			action,
 			args,
@@ -160,23 +158,17 @@ export class Glue {
 	private handleMessage = (message: IPayload): void => {
 		switch (message.type) {
 			case 'init': {
-				if (this.initialized) {
-					throw new Error('glue is already initialized');
-				}
-
 				const data = message.data as IInitData;
 				if (!message.callbackId) {
 					throw new Error('glue init has no callbackId');
 				}
 
-				this.initialized = true;
 				console.log('glue initialized', data.features);
-				// TODO(longsleep): Initialize features.
 
 				if (!this.handler) {
 					return;
 				}
-				this.handler(this, message).then((reply: IInitData) => {
+				this.handler(message).then((reply: IInitData) => {
 					this.replyMessage(message.callbackId as string, reply);
 				});
 
@@ -208,7 +200,7 @@ export class Glue {
 				}
 
 				if (this.handler) {
-					this.handler(this, message).then((reply: unknown) => {
+					this.handler(message).then((reply: unknown) => {
 						this.replyMessage(message.callbackId as string, reply);
 					});
 				}
@@ -218,7 +210,7 @@ export class Glue {
 
 			default:
 				if (this.handler) {
-					this.handler(this, message).then((reply: unknown) => {
+					this.handler(message).then((reply: unknown) => {
 						if (message.callbackId) {
 							this.replyMessage(message.callbackId, reply);
 						}

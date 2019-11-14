@@ -12,9 +12,9 @@ export function getOriginFromUrl(url: string): string {
 	return a.origin;
 }
 
-export const queueMicroTask = (() => {
+export const queueMicroTask = ((): Function => {
 	if (typeof window.queueMicrotask !== 'function') {
-		return function(callback: () => void) {
+		return function(callback: () => void): void {
 			Promise.resolve().then(callback).catch(e => setTimeout(() => {
 				throw e;
 			}));

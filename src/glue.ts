@@ -15,16 +15,15 @@ export interface IEmbeddOptions {
 	attributes?: {[key: string]: string};
 	origin?: string;
 	features?: {[key: string]: (...args: unknown[]) => unknown};
-	action?: string;
 
-	onReady?: (data: IReadyData, api: API<unknown>) => void;
+	onBeforeInit?: (api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 
 export interface IEnableOptions {
 	origin?: string;
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 
-	onReady?: (data: IReadyData, api: API<unknown>) => void;
+	onBeforeReady?: (api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>, readyData: IReadyData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 
 export interface IPayload {
@@ -38,6 +37,7 @@ export interface IPayload {
 export interface IInitData {
 	features?: Array<string>;
 	action?: string;
+	error?: boolean;
 }
 
 export interface ICallbackData {
@@ -67,11 +67,28 @@ export type API<T> = {
 }
 
 /**
- * Glue is the main Glue Javascript library entry point.
+ * Glue holds together glue applications and their API.
  */
 export class Glue {
 	public static version: string = __VERSION__;
 
+	public api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
+
+	public constructor(
+		{
+			api,
+		}: {
+			api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		}) {
+
+		this.api = api;
+	}
+}
+
+/**
+ * Controller implements the internal Glue functionality.
+ */
+export class Controller {
 	private window: Window;
 	private origin: string;
 
@@ -99,8 +116,12 @@ export class Glue {
 		this.handler = handler;
 
 		window.addEventListener('message', this.receiveMessage, false);
+	}
 
-		console.log('new glue', window, this.window, this.origin);
+	public Glue(api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>): Glue { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		return new Glue({
+			api,
+		});
 	}
 
 	public postMessage = (type: string, data: unknown): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -163,7 +184,7 @@ export class Glue {
 					throw new Error('glue init has no callbackId');
 				}
 
-				console.log('glue initialized', data.features);
+				console.debug('glue initialized', data.features);
 
 				if (!this.handler) {
 					return;

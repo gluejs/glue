@@ -5,29 +5,38 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 	<meta name="referrer" content="no-referrer">
 
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.5.2/css/bulma.min.css" integrity="sha256-d+mgRrjtsPCjrT7ltuB1sZ2VybUn1Xgdf8piVG/Va/k=" crossorigin="anonymous" />
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css" integrity="sha256-D9M5yrVDqFlla7nlELDaYZIpXfFWDytQtiV+TaH6F1I=" crossorigin="anonymous">
 	<link rel="stylesheet" href="index.css" />
 </head>
 <body>
 <div id="app" v-cloak>
 
-<section class="hero is-warning">
+<section v-bind:class="[{ hero: true }, headerClass]">
 	<div class="hero-body">
 		<div class="container">
 			<h1 class="title">
 				Glue minimal example
 			</h1>
 			<h2 class="subtitle">
-				This is a simple web app to test Glue.
+				This is a simple web app to test embedding a simple web app with Glue.
 			</h2>
 		</div>
 	</div>
 </section>
 
-<section id="main" ref="main">
+<section id="main">
+	<nav class="navbar" role="navigation" aria-label="main navigation">
+		<div class="navbar-item">
+			<div class="buttons">
+				<button class="button is-primary" v-on:click="start" :disabled="started">Start</button>
+				<button class="button is-warning" v-on:click="okOrCancel" :disabled="!started || !glue || ready">Ok or Cancel</button>
+			</div>
+		</div>
+	</nav>
+	<secton id="embedded" ref="embedded" v-show="ready"></section>
 </section>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.4.2/vue.min.js" integrity="sha256-Gs0UYwrz/B58FsQggzU+vvCSyG/pewemP4Lssjzv8Ho=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.min.js" integrity="sha256-chlNFSVx3TdcQ2Xlw7SvnbLAavAQLO0Y/LBiWX04viY=" crossorigin="anonymous"></script>
 <script src="../../umd/glue.js" crossorigin="anonymous"></script>
 <script src="index.js"></script>
 

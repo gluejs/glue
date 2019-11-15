@@ -12,6 +12,7 @@
 import {
 	API,
 	Glue,
+	Controller,
 	ICallData,
 	IInitData,
 	IEmbeddOptions,
@@ -33,81 +34,124 @@ import {
  * @param options Embedded options.
  */
 async function embed(url: string, container: Element, options?: IEmbeddOptions): Promise<Glue> {
-	const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
+	return new Promise((resolve, reject) => {
+		const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
 
-	const frame = ownerDocument.createElement('iframe');
-	if (options && options.className) {
-		frame.className = options.className;
-	}
-	if (options && options.attributes) {
-		Object.entries(options.attributes).forEach(([key, value]) => {
-			frame.setAttribute(key, value);
-		});
-	}
-	frame.setAttribute('src', url);
-	container.appendChild(frame);
+		const frame = ownerDocument.createElement('iframe');
+		if (options && options.className) {
+			frame.className = options.className;
+		}
+		if (options && options.attributes) {
+			Object.entries(options.attributes).forEach(([key, value]) => {
+				frame.setAttribute(key, value);
+			});
+		}
+		frame.setAttribute('src', url);
+		container.appendChild(frame);
 
-	if (!frame.contentWindow) {
-		throw new Error('new frame has no contentWindow');
-	}
+		if (!frame.contentWindow) {
+			throw new Error('new frame has no contentWindow');
+		}
 
-	const origin = options && options.origin ? options.origin : getOriginFromUrl(url);
-	const features = options ? options.features : {};
-	const state: {features?: Array<string>} = {};
-	const glue = new Glue({
-		glueWindow: frame.contentWindow,
-		origin,
-		handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-			switch (message.type) {
-				case 'init': {
-					const data = message.data as IInitData;
-					const reply: IInitData = {
-						features: features ? Object.keys(features) : [],
-					};
-					if (options && options.action) {
-						if (data.features && data.features.includes(options.action)) {
-							reply.action = options.action;
-						} else {
-							console.warn(`glue embed with unsupported action: ${options.action}`);
-						}
-					}
-					state.features = data.features;
-					return reply;
-				}
+		const origin = options && options.origin ? options.origin : getOriginFromUrl(url);
+		const features = options ? options.features : {};
+		const state: {
+			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>;  /* eslint-disable-line @typescript-eslint/no-explicit-any */
+			beforeInitResolve?: (value?: unknown) => void;
+			beforeInitReject?: (reason?: unknown) => void;
+		} = {};
 
-				case 'ready': {
-					if (options && options.onReady) {
+		const controller = new Controller({
+			glueWindow: frame.contentWindow,
+			origin,
+			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+				switch (message.type) {
+					case 'init': {
+						const data = message.data as IInitData;
+						const reply: IInitData = {
+							features: features ? Object.keys(features) : [],
+						};
+
 						const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
-						if (state.features) {
-							state.features.forEach(action => {
+						if (data.features) {
+							data.features.forEach(action => {
 								api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-									return glue.callAction(action, args);
+									return controller.callAction(action, args);
 								}
 							});
 						}
+						state.api = api;
+
+						if (options && options.onBeforeInit) {
+							const p = new Promise((resolve, reject) => {
+								state.beforeInitResolve = resolve;
+								state.beforeInitReject = reject;
+							});
+							if (!state.beforeInitResolve || !state.beforeInitReject) {
+								throw new Error('glue init promise error');
+							}
+							try {
+								const action = options.onBeforeInit(api, p);
+								if (action) {
+									if (!data.features || !data.features.includes(action)) {
+										state.beforeInitReject(new Error(`unsupported action: ${action}`));
+									} else {
+										reply.action = action;
+									}
+								}
+							} catch (err) {
+								reject(new Error(`onInit failed: ${err}`));
+								return;
+							}
+						}
+
+						return reply;
+					}
+
+					case 'ready': {
+						if (!state.api) {
+							throw new Error('failed to glue: no API');
+						}
+
+						const glue = controller.Glue(state.api);
 						const data = message.data as IReadyData;
-						options.onReady(data, api);
+						if (options && options.onBeforeInit && state.beforeInitResolve && state.beforeInitReject) {
+							if (data.ready) {
+								await state.beforeInitResolve(data.data);
+							} else {
+								await state.beforeInitReject(data.data);
+							}
+							resolve(glue);
+						} else {
+							if (data.ready) {
+								resolve(glue);
+							} else {
+								if (data.error) {
+									throw new Error(`failed to glue: ${data.data}`)
+								} else {
+									reject(glue);
+								}
+							}
+						}
+						break;
 					}
-					break;
-				}
 
-				case 'call': {
-					const data = message.data as ICallData;
-					const handler = features ? features[data.action] : null;
-					if (!handler) {
-						throw new Error(`unknown action: ${data.action}`);
+					case 'call': {
+						const data = message.data as ICallData;
+						const handler = features ? features[data.action] : null;
+						if (!handler) {
+							throw new Error(`unknown action: ${data.action}`);
+						}
+						const args = data.args ? data.args : [];
+						return handler(...args);
 					}
-					const args = data.args ? data.args : [];
-					return handler(...args);
-				}
 
-				default:
-					console.debug(`glue (embed) unknown message type: ${message.type}`);
-			}
-		},
+					default:
+						console.debug(`glue (embed) unknown message type: ${message.type}`);
+				}
+			},
+		});
 	});
-
-	return glue;
 }
 
 /**
@@ -117,86 +161,104 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
  * @param options Enable options.
  */
 async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<Glue> {
-	if (!sourceWindow) {
-		sourceWindow = window.parent;
-	}
-
-	const features = options ? options.features : {};
-	const glue = new Glue({
-		glueWindow: sourceWindow,
-		origin: options ? options.origin : undefined,
-		handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-			switch (message.type) {
-				case 'call': {
-					const data = message.data as ICallData;
-					const handler = features ? features[data.action] : null;
-					if (!handler) {
-						throw new Error(`unknown action: ${data.action}`);
-					}
-					const args = data.args ? data.args : [];
-					return handler(...args);
-				}
-
-				default:
-					console.debug(`glue (enable) unknown message type: ${message.type}`)
-			}
-		},
-	})
-	queueMicroTask(() => {
-		const request: IInitData = {
-			features: features ? Object.keys(features) : [],
+	return new Promise((resolve, reject) => {
+		if (!sourceWindow) {
+			sourceWindow = window.parent;
 		}
-		glue.postMessage('init', request).then(async (initData: IInitData): Promise<void> => {
-			const ready: IReadyData = {
-				ready: true,
-			}
-			if (initData.action) {
-				// Trigger action, this action is set when initializing and it
-				// is triggered before the app reports ready.
-				if (features && features[initData.action])  {
-					const handler = features[initData.action];
-					try {
-						const result = await handler();
-						if (result !== undefined) {
-							ready.data = result;
+		if (sourceWindow === self) {
+			// Do nothing when we are self.
+			return;
+		}
+
+		const features = options ? options.features : {};
+		const controller = new Controller({
+			glueWindow: sourceWindow,
+			origin: options ? options.origin : undefined,
+			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+				switch (message.type) {
+					case 'call': {
+						const data = message.data as ICallData;
+						const handler = features ? features[data.action] : null;
+						if (!handler) {
+							throw new Error(`unknown action: ${data.action}`);
 						}
-					} catch(e) {
-						ready.ready = false;
-						ready.error = true;
-						ready.data = e;
+						const args = data.args ? data.args : [];
+						return handler(...args);
 					}
-				} else {
-					ready.ready = false;
-					ready.error = true;
-					ready.data = new Error(`unknown glue action: ${initData.action}`);
+
+					default:
+						console.debug(`glue (enable) unknown message type: ${message.type}`)
 				}
+			},
+		})
+		queueMicroTask(() => {
+			const request: IInitData = {
+				features: features ? Object.keys(features) : [],
 			}
-			glue.postMessage('ready', ready).then((): void => {
-				if (options && options.onReady) {
-					const ready: IReadyData = {
-						ready: true,
-					}
-					const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
-					if (initData.features) {
-						for (const action of initData.features) {
-							api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-								return glue.callAction(action, args);
+			controller.postMessage('init', request).then(async (initData?: IInitData): Promise<void> => {
+				if (!initData || initData.error) {
+					// TODO(longsleep): Initialization failed. What now?
+					reject(new Error(`glue init received error: ${initData ? initData.error : 'no data'}`));
+					return;
+				}
+
+				const readyData: IReadyData = {
+					ready: true,
+				}
+				if (initData.action) {
+					// Trigger action, this action is set when initializing and it
+					// is triggered before the app reports ready.
+					if (features && features[initData.action])  {
+						const handler = features[initData.action];
+						try {
+							const result = await handler();
+							if (result !== undefined) {
+								readyData.data = result;
 							}
+						} catch(e) {
+							readyData.ready = false;
+							readyData.error = true;
+							readyData.data = e;
+						}
+					} else {
+						readyData.ready = false;
+						readyData.error = true;
+						readyData.data = new Error(`unknown glue action: ${initData.action}`);
+					}
+				}
+
+				const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+				if (initData.features) {
+					for (const action of initData.features) {
+						api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+							return controller.callAction(action, args);
 						}
 					}
-					options.onReady(ready, api);
 				}
+
+				if (options && options.onBeforeReady) {
+					try {
+						options.onBeforeReady(api, readyData);
+					} catch(e) {
+						readyData.ready = false;
+						readyData.error = true;
+						readyData.data = e;
+					}
+				}
+
+				controller.postMessage('ready', readyData).then((): void => {
+					resolve(controller.Glue(api));
+				});
+			}).catch((reason: unknown)=> {
+				throw new Error(`glue init failed: ${reason}`);
 			});
-		}).catch((reason: unknown)=> {
-			throw new Error(`glue init failed: ${reason}`);
 		});
 	});
-
-	return glue;
 }
 
 export {
 	Glue,
+	Controller,
 	embed,
 	enable,
 }

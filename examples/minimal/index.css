@@ -1,3 +1,7 @@
+html {
+	font-size: 12px;
+}
+
 html, body {
 	height: 100%;
 	overflow: auto;
@@ -15,9 +19,17 @@ html, body {
 
 #main {
 	display: flex;
+	align-items: flex-start;
 	flex: 1;
+	padding: 1em;
+}
+
+#embedded {
+	flex: 1;
+	display: flex;
 }
 
 iframe.app {
 	flex: 1;
+	padding-left: 1em;
 }

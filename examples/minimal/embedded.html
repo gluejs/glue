@@ -5,10 +5,28 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 	<meta name="referrer" content="no-referrer">
 
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.5.2/css/bulma.min.css" integrity="sha256-d+mgRrjtsPCjrT7ltuB1sZ2VybUn1Xgdf8piVG/Va/k=" crossorigin="anonymous" />
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css" integrity="sha256-D9M5yrVDqFlla7nlELDaYZIpXfFWDytQtiV+TaH6F1I=" crossorigin="anonymous">
+	<link rel="stylesheet" href="embedded.css" />
 </head>
 <body>
-<h3>Embedded app.</h1>
+
+<section>
+	<nav class="navbar" role="navigation" aria-label="main navigation">
+		<div class="navbar-item">
+			<div class="buttons">
+				<button class="button is-success" onClick="app.handleOKCancelClick('ok')">OK</button>
+				<button class="button is-danger" onClick="app.handleOKCancelClick('cancel')">Cancel</button>
+			</div>
+		</div>
+		<div class="navbar-end">
+			<div class="navbar-item">
+				<div class="buttons">
+					<button class="button is-light" onClick="app.handleToggleHeaderColorClick()">Toggle header color</button>
+				</div>
+			</div>
+		</div>
+	</nav>
+</section>
 
 <script src="../../umd/glue.js" crossorigin="anonymous"></script>
 <script src="embedded.js"></script>

@@ -37,15 +37,15 @@ window.app = new Vue({
 						console.info('minimalFeatureTest1 feature triggered');
 					},
 				},
-				onBeforeInit: (api, cont) => {
-					console.log('glue onBeforeInit', Object.keys(api));
+				onBeforeInit: (glue, cont) => {
+					console.log('glue onBeforeInit', glue.mode, Object.keys(glue.api));
 					cont.then(result => {
 						console.log('glue onInit action result', result);
 					});
 					return 'embeddedFeatureWithSmallDelay';
 				}
 			}).then(async glue => {
-				console.info('glue complete', glue.enabled, glue);
+				console.info('glue complete', glue.mode, glue.enabled, glue);
 				this.glue = glue;
 
 				if ('someOtherThing' in glue.api) {

@@ -13,17 +13,23 @@ export const API_VERSION = 0;
 export interface IEmbeddOptions {
 	className?: string;
 	attributes?: {[key: string]: string};
+
 	origin?: string;
+	mode?: string;
+
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 
-	onBeforeInit?: (api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	onBeforeInit?: (glue: Glue, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 
 export interface IEnableOptions {
+	timeout?: number;
 	origins?: Array<string>;
+
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 
-	onBeforeReady?: (api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>, readyData: IReadyData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	onInit?: (glue: Glue, initData: IInitData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	onBeforeReady?: (glue: Glue, readyData: IReadyData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 
 export interface IPayload {
@@ -36,6 +42,7 @@ export interface IPayload {
 
 export interface IInitData {
 	features?: Array<string>;
+	mode?: string;
 	action?: string;
 	error?: boolean;
 }
@@ -73,19 +80,23 @@ export class Glue {
 	public static version: string = __VERSION__;
 
 	public readonly enabled: boolean = false;
+	public readonly mode?: string;
 	public api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
 	public constructor(
 		{
 			api,
+			mode,
 		}: {
 			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+			mode?: string;
 		}) {
 		this.enabled = api !== undefined;
 		if (api === undefined) {
 			api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		}
 		this.api = api;
+		this.mode = mode;
 	}
 }
 
@@ -120,9 +131,16 @@ export class Controller {
 		window.addEventListener('message', this.receiveMessage, false);
 	}
 
-	public Glue(api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>): Glue { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	public Glue({
+		api,
+		mode,
+	}: {
+		api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		mode?: string;
+	}): Glue {
 		return new Glue({
 			api,
+			mode,
 		});
 	}
 

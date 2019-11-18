@@ -12,13 +12,14 @@ window.app = new function App() {
 		pending: null,
 	}
 
+	console.time('embedded glue init');
 	Glue.enable(window.parent, {
 		features: {
 			embeddedFeatureWithSmallDelay: () => {
-				console.debug('embedded embeddedFeatureWith5SecondsDelay triggered');
+				console.debug('embedded embeddedFeatureWithSmallDelay triggered');
 				return new Promise(resolve => {
 					setTimeout(() => {
-						console.debug('embedded embeddedFeatureWith5SecondsDelay delay reached');
+						console.debug('embedded embeddedFeatureWithSmallDelay delay reached');
 						resolve({
 							some: 'result',
 						});
@@ -44,12 +45,19 @@ window.app = new function App() {
 				});
 			}
 		},
-		onBeforeReady: (api, readyData) => {
-			console.log('embedded glue onBeforeReady', Object.keys(api), readyData);
+		onInit: (glue, initData) => {
+			console.timeEnd('embedded glue init', glue.mode, Object.keys(glue.api), initData);
+		},
+		onBeforeReady: (glue, readyData) => {
+			console.log('embedded glue onBeforeReady', glue.mode, Object.keys(glue.api), readyData);
 		},
 	}).then(glue => {
-		console.debug('embedded glue complete', glue.enabled, glue);
+		console.debug('embedded glue complete', glue.mode, glue.enabled, glue);
 		state.glue = glue;
+
+		if (glue.mode === undefined) {
+			alert('Loaded without glue!');
+		}
 	});
 
 	this.handleOKCancelClick = (action) => {

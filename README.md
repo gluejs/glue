@@ -6,12 +6,6 @@ A JavaScript library for easy integration of independent web applications.
 
 The idea is that web applications load Glue and enable it by exposing a set of feature functions. This functions can then be triggered by other applications which also run Glue after performing a handshake via a postMessage based JSON API.
 
-### Load Glue library
-
-```
-
-```
-
 ### Enabling Glue for an App
 
 ```javascript

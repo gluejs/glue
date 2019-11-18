@@ -35,9 +35,18 @@ import {
  * @param options Embedded options.
  */
 async function embed(url: string, container: Element, options?: IEmbeddOptions): Promise<Glue> {
+	const state: {
+		glue?: Glue;
+		beforeInitResolve?: (value?: unknown) => void;
+		beforeInitReject?: (reason?: unknown) => void;
+
+		retryTimer?: ReturnType<typeof setTimeout>;
+	} = {};
+
 	return new Promise((resolve, reject) => {
 		// Add default option values and ensure options.
 		options = {
+			timeout: 5000,
 			...options,
 		}
 
@@ -45,11 +54,6 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		const origin = options.origin ? options.origin : src.origin;
 		const features = options.features;
 		const mode = options.mode ? options.mode : '';
-		const state: {
-			glue?: Glue;
-			beforeInitResolve?: (value?: unknown) => void;
-			beforeInitReject?: (reason?: unknown) => void;
-		} = {};
 
 		// Create glue controller.
 		const controller = new Controller({
@@ -57,6 +61,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 				switch (message.type) {
 					case 'init': {
+						if (state.retryTimer) {
+							clearTimeout(state.retryTimer);
+						}
+
 						const data = message.data as IInitData;
 						const reply: IInitData = {
 							features: features ? Object.keys(features) : [],
@@ -163,12 +171,37 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		}
 		frame.setAttribute('src', src.toString());
 
-		// Inject iframe and attach glue.
-		container.appendChild(frame);
-		if (!frame.contentWindow) {
-			throw new Error('new frame has no contentWindow');
+		// Append iframe with timeout and retry.
+		const append = (): void => {
+			// Inject iframe and attach glue.
+			container.appendChild(frame);
+			if (!frame.contentWindow) {
+				throw new Error('new frame has no contentWindow');
+			}
+			controller.attach(frame.contentWindow);
 		}
-		controller.attach(frame.contentWindow);
+		const retry = (): void => {
+			controller.detach();
+			container.removeChild(frame);
+			setTimeout(() => {
+				append();
+			}, 1000); // NOTE(longsleep): Retry time hardcoded - is it needed to have a configuration?
+		}
+		frame.addEventListener('load', () => {
+			if (state.glue) {
+				delete state.glue;
+			}
+			if (options && options.timeout) {
+				state.retryTimer = setTimeout(() => {
+					if (!state.glue) {
+						retry();
+					}
+				}, options.timeout);
+			} else {
+				reject(new Error('glue timeout'));
+			}
+		});
+		append();
 	});
 }
 

@@ -11,6 +11,9 @@
 export const API_VERSION = 0;
 
 export interface IEmbeddOptions {
+	timeout?: number;
+	retries?: number;
+
 	className?: string;
 	attributes?: {[key: string]: string};
 

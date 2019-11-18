@@ -48,7 +48,7 @@ window.app = new function App() {
 			console.log('embedded glue onBeforeReady', Object.keys(api), readyData);
 		},
 	}).then(glue => {
-		console.debug('embedded glue is ready', glue);
+		console.debug('embedded glue complete', glue.enabled, glue);
 		state.glue = glue;
 	});
 

@@ -72,15 +72,19 @@ export type API<T> = {
 export class Glue {
 	public static version: string = __VERSION__;
 
+	public readonly enabled: boolean = false;
 	public api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
 	public constructor(
 		{
 			api,
 		}: {
-			api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		}) {
-
+		this.enabled = api !== undefined;
+		if (api === undefined) {
+			api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		}
 		this.api = api;
 	}
 }
@@ -118,7 +122,7 @@ export class Controller {
 		window.addEventListener('message', this.receiveMessage, false);
 	}
 
-	public Glue(api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>): Glue { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	public Glue(api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>): Glue { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		return new Glue({
 			api,
 		});

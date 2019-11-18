@@ -47,6 +47,8 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		// Add default option values and ensure options.
 		options = {
 			timeout: 5000,
+			sandboxRestrictions: 'allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin',
+			featurePolicy: 'animations; autoplay; camera; encrypted-media; fullscreen; geolocation; microphone; speaker; vr',
 			...options,
 		}
 
@@ -155,6 +157,12 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		const frame = ownerDocument.createElement('iframe');
 		if (options && options.className) {
 			frame.className = options.className;
+		}
+		if (options.sandboxRestrictions) {
+			frame.setAttribute('sandbox', options.sandboxRestrictions);
+		}
+		if (options.featurePolicy) {
+			frame.setAttribute('allow', options.featurePolicy);
 		}
 		if (options && options.attributes) {
 			Object.entries(options.attributes).forEach(([key, value]) => {

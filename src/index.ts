@@ -36,11 +36,17 @@ import {
  */
 async function embed(url: string, container: Element, options?: IEmbeddOptions): Promise<Glue> {
 	return new Promise((resolve, reject) => {
+		// Add default option values and ensure options.
+		options = {
+			...options,
+		}
+
 		const src = new URL(url, window.location.href);
-		const origin = options && options.origin ? options.origin : src.origin;
-		const features = options ? options.features : {};
+		const origin = options.origin ? options.origin : src.origin;
+		const features = options.features;
+		const mode = options.mode ? options.mode : '';
 		const state: {
-			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>;  /* eslint-disable-line @typescript-eslint/no-explicit-any */
+			glue?: Glue;
 			beforeInitResolve?: (value?: unknown) => void;
 			beforeInitReject?: (reason?: unknown) => void;
 		} = {};
@@ -64,7 +70,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 								}
 							});
 						}
-						state.api = api;
+						state.glue = controller.Glue({api, mode});
 
 						if (options && options.onBeforeInit) {
 							const p = new Promise((resolve, reject) => {
@@ -75,7 +81,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 								throw new Error('glue init promise error');
 							}
 							try {
-								const action = options.onBeforeInit(api, p);
+								const action = options.onBeforeInit(state.glue, p);
 								if (action) {
 									if (!data.features || !data.features.includes(action)) {
 										state.beforeInitReject(new Error(`unsupported action: ${action}`));
@@ -93,11 +99,11 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 					}
 
 					case 'ready': {
-						if (!state.api) {
-							throw new Error('failed to glue: no API');
+						if (!state.glue) {
+							throw new Error('failed to glue: no state');
 						}
 
-						const glue = controller.Glue(state.api);
+						//const glue = controller.Glue(state.api);
 						const data = message.data as IReadyData;
 						if (options && options.onBeforeInit && state.beforeInitResolve && state.beforeInitReject) {
 							if (data.ready) {
@@ -105,15 +111,15 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 							} else {
 								await state.beforeInitReject(data.data);
 							}
-							resolve(glue);
+							resolve(state.glue);
 						} else {
 							if (data.ready) {
-								resolve(glue);
+								resolve(state.glue);
 							} else {
 								if (data.error) {
 									throw new Error(`failed to glue: ${data.data}`)
 								} else {
-									reject(glue);
+									reject(state.glue);
 								}
 							}
 						}
@@ -149,6 +155,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		}
 
 		// Prepare URL and set it to element.
+		setGlueParameter(src, 'mode', mode);
 		if (origin !== window.origin) {
 			// Cross origin, add glue origin hash parameter to allow white list
 			// checks on the other end.
@@ -176,11 +183,22 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		if (!sourceWindow) {
 			sourceWindow = window.parent;
 		}
-		if (sourceWindow === self) {
-			// Return empty Glue API if we are self, this means Glue is not active.
+
+		// Get glue mode.
+		const mode = getGlueParameter('mode');
+
+		if (sourceWindow === self || mode === null) {
+			// Return empty Glue API if we are self, or glue mode is not set. It
+			// this means Glue is not active.
 			resolve(new Glue({}));
 			return;
 		}
+
+		// Add default option values and ensure options.
+		options = {
+			timeout: 5000,
+			...options,
+		};
 
 		// Validate origin.
 		const expectedOrigin = getGlueParameter('origin');
@@ -194,7 +212,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		}
 
 		// Create glue controller.
-		const features = options ? options.features : {};
+		const features = options.features;
 		const controller = new Controller({
 			origin: expectedOrigin ? expectedOrigin : window.origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -218,12 +236,25 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		// Attach glue.
 		controller.attach(sourceWindow);
 
+		// Start timeout.
+		let failed = false;
+		const timer = setTimeout(() => {
+			failed = true;
+			reject(new Error('glue timeout'));
+		}, options.timeout);
+
 		// Start initialization.
 		queueMicroTask(() => {
 			const request: IInitData = {
 				features: features ? Object.keys(features) : [],
+				mode,
 			}
 			controller.postMessage('init', request).then(async (initData?: IInitData): Promise<void> => {
+				clearTimeout(timer);
+				if (failed) {
+					// Do nothing when flagged failed.
+					return;
+				}
 				if (!initData || initData.error) {
 					// TODO(longsleep): Initialization failed. What now?
 					reject(new Error(`glue init received error: ${initData ? initData.error : 'no data'}`));
@@ -233,7 +264,33 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 				const readyData: IReadyData = {
 					ready: true,
 				}
-				if (initData.action) {
+
+				// Create API action handlers.
+				const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+				if (initData.features) {
+					for (const action of initData.features) {
+						api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+							return controller.callAction(action, args);
+						}
+					}
+				}
+
+				// Create glue.
+				const glue = controller.Glue({api, mode});
+
+				// Trigger onInit hook.
+				if (options && options.onInit) {
+					try {
+						options.onInit(glue, initData);
+					} catch(e) {
+						readyData.ready = false;
+						readyData.error = true;
+						readyData.data = e;
+					}
+				}
+
+				// Trigger initial requested action.
+				if (readyData.ready && initData.action) {
 					// Trigger action, this action is set when initializing and it
 					// is triggered before the app reports ready.
 					if (features && features[initData.action])  {
@@ -255,18 +312,10 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					}
 				}
 
-				const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
-				if (initData.features) {
-					for (const action of initData.features) {
-						api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-							return controller.callAction(action, args);
-						}
-					}
-				}
-
+				// Trigger beforeReady hook.
 				if (options && options.onBeforeReady) {
 					try {
-						options.onBeforeReady(api, readyData);
+						options.onBeforeReady(glue, readyData);
 					} catch(e) {
 						readyData.ready = false;
 						readyData.error = true;
@@ -274,8 +323,9 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					}
 				}
 
+				// Reply with redy result.
 				controller.postMessage('ready', readyData).then((): void => {
-					resolve(controller.Glue(api));
+					resolve(glue);
 				});
 			}).catch((reason: unknown)=> {
 				throw new Error(`glue init failed: ${reason}`);

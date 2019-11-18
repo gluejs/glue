@@ -20,7 +20,7 @@ export interface IEmbeddOptions {
 }
 
 export interface IEnableOptions {
-	origin?: string;
+	origins?: Array<string>;
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 
 	onBeforeReady?: (api: API<{[key: string]: (...args: unknown[]) => Promise<any>}>, readyData: IReadyData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -93,7 +93,6 @@ export class Glue {
  * Controller implements the internal Glue functionality.
  */
 export class Controller {
-	private window: Window;
 	private origin: string;
 
 	private callbackCounter: number;
@@ -101,17 +100,16 @@ export class Controller {
 
 	private handler?: (message: IPayload) => Promise<any>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
+	private window?: Window;
+
 	public constructor(
 		{
-			glueWindow,
 			origin,
 			handler,
 		}: {
-			glueWindow: Window;
-			origin?: string;
+			origin: string;
 			handler?: (message: IPayload) => Promise<unknown>;
 		}) {
-		this.window = glueWindow;
 		this.origin = origin ? origin : window.origin;
 
 		this.callbackCounter = 0;
@@ -128,8 +126,24 @@ export class Controller {
 		});
 	}
 
+	public attach(glueWindow: Window): void {
+		if (this.window !== undefined) {
+			throw new Error('glue already attached');
+		}
+
+		this.window = glueWindow;
+	}
+
+	public detach(): void {
+		this.window = undefined;
+	}
+
 	public postMessage = (type: string, data: unknown): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		return new Promise((resolve, reject) => {
+			if (this.window === undefined) {
+				throw new Error('glue is not attached');
+			}
+
 			const message: IPayload = {
 				v: API_VERSION,
 				glue: true,

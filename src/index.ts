@@ -21,8 +21,9 @@ import {
 	IReadyData,
 } from './glue';
 import {
-	getOriginFromUrl,
+	getGlueParameter,
 	queueMicroTask,
+	setGlueParameter,
 } from './utils';
 
 /**
@@ -35,25 +36,8 @@ import {
  */
 async function embed(url: string, container: Element, options?: IEmbeddOptions): Promise<Glue> {
 	return new Promise((resolve, reject) => {
-		const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
-
-		const frame = ownerDocument.createElement('iframe');
-		if (options && options.className) {
-			frame.className = options.className;
-		}
-		if (options && options.attributes) {
-			Object.entries(options.attributes).forEach(([key, value]) => {
-				frame.setAttribute(key, value);
-			});
-		}
-		frame.setAttribute('src', url);
-		container.appendChild(frame);
-
-		if (!frame.contentWindow) {
-			throw new Error('new frame has no contentWindow');
-		}
-
-		const origin = options && options.origin ? options.origin : getOriginFromUrl(url);
+		const src = new URL(url, window.location.href);
+		const origin = options && options.origin ? options.origin : src.origin;
 		const features = options ? options.features : {};
 		const state: {
 			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>;  /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -61,8 +45,8 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			beforeInitReject?: (reason?: unknown) => void;
 		} = {};
 
+		// Create glue controller.
 		const controller = new Controller({
-			glueWindow: frame.contentWindow,
 			origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 				switch (message.type) {
@@ -151,6 +135,33 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 				}
 			},
 		});
+
+		// Create iframe.
+		const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
+		const frame = ownerDocument.createElement('iframe');
+		if (options && options.className) {
+			frame.className = options.className;
+		}
+		if (options && options.attributes) {
+			Object.entries(options.attributes).forEach(([key, value]) => {
+				frame.setAttribute(key, value);
+			});
+		}
+
+		// Prepare URL and set it to element.
+		if (origin !== window.origin) {
+			// Cross origin, add glue origin hash parameter to allow white list
+			// checks on the other end.
+			setGlueParameter(src, 'origin', origin);
+		}
+		frame.setAttribute('src', src.toString());
+
+		// Inject iframe and attach glue.
+		container.appendChild(frame);
+		if (!frame.contentWindow) {
+			throw new Error('new frame has no contentWindow');
+		}
+		controller.attach(frame.contentWindow);
 	});
 }
 
@@ -171,10 +182,21 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 			return;
 		}
 
+		// Validate origin.
+		const expectedOrigin = getGlueParameter('origin');
+		if (expectedOrigin) {
+			if (expectedOrigin !== window.origin) {
+				// Validate white list if cross origin.
+				if (!options || !options.origins || !options.origins.includes('expectedOrigin')) {
+					throw new Error('glue origin is not allowed');
+				}
+			}
+		}
+
+		// Create glue controller.
 		const features = options ? options.features : {};
 		const controller = new Controller({
-			glueWindow: sourceWindow,
-			origin: options ? options.origin : undefined,
+			origin: expectedOrigin ? expectedOrigin : window.origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
 				switch (message.type) {
 					case 'call': {
@@ -191,7 +213,12 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 						console.debug(`glue (enable) unknown message type: ${message.type}`)
 				}
 			},
-		})
+		});
+
+		// Attach glue.
+		controller.attach(sourceWindow);
+
+		// Start initialization.
 		queueMicroTask(() => {
 			const request: IInitData = {
 				features: features ? Object.keys(features) : [],

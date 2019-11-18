@@ -6,10 +6,15 @@
  *
  */
 
-export function getOriginFromUrl(url: string): string {
-	const a = document.createElement('a');
-	a.href = url;
-	return a.origin;
+export function getGlueParameter(name: string): string | null {
+	const hashParams = new URLSearchParams(window.location.hash.substr(1));
+	return hashParams.get(`glue-${name}`);
+}
+
+export function setGlueParameter(url: URL, name: string, value: string): void {
+	const hashParams = new URLSearchParams(url.hash.substr(1));
+	hashParams.set(`glue-${name}`, value);
+	url.hash = hashParams.toString();
 }
 
 export const queueMicroTask = ((): Function => {

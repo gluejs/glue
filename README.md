@@ -32,7 +32,8 @@ Glue.embed('./hello-world.html', document.body, {
 	/* Glue embed options */
 	features: {
 		/* Exposed features for the embedded app - yes it goes both ways */
-	}
+	},
+	sandboxRestrictions: 'allow-scripts allow-same-origin allow-modals',
 }).then(glue => {
 	/* Resolved when the Glue application is ready */
 	if ('helloWorld' in glue.api) {

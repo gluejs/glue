@@ -16,6 +16,8 @@ export interface IEmbeddOptions {
 
 	className?: string;
 	attributes?: {[key: string]: string};
+	sandboxRestrictions?: string;
+	featurePolicy?: string;
 
 	origin?: string;
 	mode?: string;

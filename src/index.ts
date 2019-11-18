@@ -166,7 +166,8 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 			sourceWindow = window.parent;
 		}
 		if (sourceWindow === self) {
-			// Do nothing when we are self.
+			// Return empty Glue API if we are self, this means Glue is not active.
+			resolve(new Glue({}));
 			return;
 		}
 

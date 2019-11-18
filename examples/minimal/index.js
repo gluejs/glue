@@ -45,7 +45,7 @@ window.app = new Vue({
 					return 'embeddedFeatureWithSmallDelay';
 				}
 			}).then(async glue => {
-				console.info('glue is ready', glue);
+				console.info('glue complete', glue.enabled, glue);
 				this.glue = glue;
 
 				if ('someOtherThing' in glue.api) {

@@ -203,12 +203,13 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			}, 1000); // NOTE(longsleep): Retry time hardcoded - is it needed to have a configuration?
 		}
 		frame.addEventListener('load', () => {
-			if (state.glue) {
-				delete state.glue;
-			}
 			if (options) {
 				if (options.timeout) {
+					if (state.retryTimer) {
+						clearTimeout(state.retryTimer);
+					}
 					state.retryTimer = setTimeout(() => {
+						// NOTE(longsleep): This does not detect when a reload fails.
 						if (!state.glue) {
 							retry();
 						}

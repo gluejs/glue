@@ -196,14 +196,16 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			if (state.glue) {
 				delete state.glue;
 			}
-			if (options && options.timeout) {
-				state.retryTimer = setTimeout(() => {
-					if (!state.glue) {
-						retry();
-					}
-				}, options.timeout);
-			} else {
-				reject(new Error('glue timeout'));
+			if (options) {
+				if (options.timeout) {
+					state.retryTimer = setTimeout(() => {
+						if (!state.glue) {
+							retry();
+						}
+					}, options.timeout);
+				} else {
+					reject(new Error('glue timeout'));
+				}
 			}
 		});
 		append();

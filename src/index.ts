@@ -256,7 +256,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 			if (expectedOrigin !== window.origin) {
 				// Validate white list if cross origin.
 				if (options && options.origins) {
-					if (options.origins.includes('expectedOrigin') || options.origins.includes('*')) {
+					if (options.origins.includes(expectedOrigin) || options.origins.includes('*')) {
 						// ok
 					} else {
 						throw new Error('glue origin is not allowed');

@@ -137,16 +137,32 @@ export class Controller {
 	}
 
 	public Glue({
-		api,
+		features,
 		mode,
 	}: {
-		api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+		features?: Array<string>;
 		mode?: string;
 	}): Glue {
-		return new Glue({
+		const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+
+		const glue =  new Glue({
 			api,
 			mode,
 		});
+
+		if (features) {
+			for (const action of features) {
+				switch (action) {
+					default:
+						// All the rest is call wrapper for API.
+						api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
+							return this.callAction(action, args);
+						}
+				}
+			}
+		}
+
+		return glue;
 	}
 
 	public attach(glueWindow: Window): void {

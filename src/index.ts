@@ -174,10 +174,15 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			// checks on the other end.
 			setGlueParameter(src, 'origin', origin);
 		}
-		frame.setAttribute('src', src.toString());
+
+		if (options && options.onFrame) {
+			options.onFrame(frame);
+		}
 
 		// Append iframe with timeout and retry.
 		const append = (): void => {
+			frame.setAttribute('src', src.toString());
+
 			// Inject iframe and attach glue.
 			container.appendChild(frame);
 			if (!frame.contentWindow) {

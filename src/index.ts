@@ -52,7 +52,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		}
 
 		const src = new URL(url, window.location.href);
-		const origin = options.origin ? options.origin : src.origin;
+		const origin = options.origin ? options.origin : window.origin;
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
@@ -113,7 +113,6 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 							throw new Error('failed to glue: no state');
 						}
 
-						//const glue = controller.Glue(state.api);
 						const data = message.data as IReadyData;
 						if (options && options.onBeforeInit && state.beforeInitResolve && state.beforeInitReject) {
 							if (data.ready) {
@@ -121,6 +120,8 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 							} else {
 								await state.beforeInitReject(data.data);
 							}
+							delete state.beforeInitResolve;
+							delete state.beforeInitReject;
 							resolve(state.glue);
 						} else {
 							if (data.ready) {
@@ -173,7 +174,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 
 		// Prepare URL and set it to element.
 		setGlueParameter(src, 'mode', mode);
-		if (origin !== window.origin) {
+		if (origin !== src.origin) {
 			// Cross origin, add glue origin hash parameter to allow white list
 			// checks on the other end.
 			setGlueParameter(src, 'origin', origin);
@@ -254,8 +255,12 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		if (expectedOrigin) {
 			if (expectedOrigin !== window.origin) {
 				// Validate white list if cross origin.
-				if (!options || !options.origins || !options.origins.includes('expectedOrigin')) {
-					throw new Error('glue origin is not allowed');
+				if (options && options.origins) {
+					if (options.origins.includes('expectedOrigin') || options.origins.includes('*')) {
+						// ok
+					} else {
+						throw new Error('glue origin is not allowed');
+					}
 				}
 			}
 		}

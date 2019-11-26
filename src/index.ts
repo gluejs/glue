@@ -52,7 +52,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		}
 
 		const src = new URL(url, window.location.href);
-		const origin = options.origin ? options.origin : window.origin;
+		const origin = options.origin ? options.origin : src.origin;
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
@@ -174,10 +174,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 
 		// Prepare URL and set it to element.
 		setGlueParameter(src, 'mode', mode);
-		if (origin !== src.origin) {
+		if (origin !== window.origin) {
 			// Cross origin, add glue origin hash parameter to allow white list
 			// checks on the other end.
-			setGlueParameter(src, 'origin', origin);
+			setGlueParameter(src, 'origin', window.origin);
 		}
 
 		if (options && options.onFrame) {

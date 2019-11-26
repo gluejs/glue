@@ -10,7 +10,6 @@
  */
 
 import {
-	API,
 	Glue,
 	Controller,
 	ICallData,
@@ -54,7 +53,9 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 
 		const src = new URL(url, window.location.href);
 		const origin = options.origin ? options.origin : src.origin;
-		const features = options.features;
+		const features: {[key: string]: (...args: unknown[]) => unknown} = {
+			...options.features,
+		};
 		const mode = options.mode ? options.mode : '';
 
 		// Create glue controller.
@@ -68,19 +69,15 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						}
 
 						const data = message.data as IInitData;
+						state.glue = controller.Glue({
+							features: data.features,
+							mode,
+						});
+
+						// Add provided features.
 						const reply: IInitData = {
 							features: features ? Object.keys(features) : [],
 						};
-
-						const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
-						if (data.features) {
-							data.features.forEach(action => {
-								api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-									return controller.callAction(action, args);
-								}
-							});
-						}
-						state.glue = controller.Glue({api, mode});
 
 						if (options && options.onBeforeInit) {
 							const p = new Promise((resolve, reject) => {
@@ -253,7 +250,9 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		}
 
 		// Create glue controller.
-		const features = options.features;
+		const features: {[key: string]: (...args: unknown[]) => unknown} = {
+			...options.features,
+		};
 		const controller = new Controller({
 			origin: expectedOrigin ? expectedOrigin : window.origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -306,18 +305,11 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					ready: true,
 				}
 
-				// Create API action handlers.
-				const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
-				if (initData.features) {
-					for (const action of initData.features) {
-						api[action] = (...args: unknown[]): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
-							return controller.callAction(action, args);
-						}
-					}
-				}
-
 				// Create glue.
-				const glue = controller.Glue({api, mode});
+				const glue = controller.Glue({
+					features: initData.features,
+					mode,
+				});
 
 				// Trigger onInit hook.
 				if (options && options.onInit) {

@@ -23,6 +23,7 @@ export interface IEmbeddOptions {
 	mode?: string;
 
 	features?: {[key: string]: (...args: unknown[]) => unknown};
+	events?: Array<string>;
 
 	onFrame?: (frame: HTMLIFrameElement) => void;
 	onBeforeInit?: (glue: Glue, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -33,6 +34,7 @@ export interface IEnableOptions {
 	origins?: Array<string>;
 
 	features?: {[key: string]: (...args: unknown[]) => unknown};
+	events?: Array<string>;
 
 	onInit?: (glue: Glue, initData: IInitData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 	onBeforeReady?: (glue: Glue, readyData: IReadyData) => void; /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -48,6 +50,7 @@ export interface IPayload {
 
 export interface IInitData {
 	features?: Array<string>;
+	events?: Set<string>;
 	mode?: string;
 	action?: string;
 	error?: boolean;
@@ -75,6 +78,20 @@ export interface ICallbackRecord {
 	reject: (reason?: unknown) => void;
 }
 
+export interface IGlueEvent {
+	type: string;
+}
+
+export interface IGlueEventData {
+	event: IGlueEvent;
+	args?: Array<unknown>;
+}
+
+export interface IGlueEventListenerRecord {
+	listener: (...args: unknown[]) => void;
+	options?: AddEventListenerOptions;
+}
+
 export type API<T> = {
 	[P in keyof T]?: T[P]
 }
@@ -86,15 +103,22 @@ export class Glue {
 	public static version: string = __VERSION__;
 
 	public readonly enabled: boolean = false;
+	public readonly api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	public readonly events: Array<string>;
 	public readonly mode?: string;
-	public api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
+
+	public dispatchEvent?: (event: IGlueEvent, ...args: unknown[]) => Promise<boolean>;
+	public addEventListener?: (type: string, listener: (...args: unknown[]) => void, options?: AddEventListenerOptions) => void;
+	public removeEventListener?: (type: string, listener: (...args: unknown[]) => void, options?: AddEventListenerOptions) => void;
 
 	public constructor(
 		{
 			api,
+			events,
 			mode,
 		}: {
 			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+			events?: Set<string>;
 			mode?: string;
 		}) {
 		this.enabled = api !== undefined;
@@ -102,6 +126,7 @@ export class Glue {
 			api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		}
 		this.api = api;
+		this.events = events ? Array.from(events) : [];
 		this.mode = mode;
 	}
 }
@@ -114,8 +139,11 @@ export class Controller {
 
 	private callbackCounter: number;
 	private callbackTable: Map<string, ICallbackRecord>;
+	private eventListenerCounter: number;
+	private eventListenerTable: Map<string, Map<string, IGlueEventListenerRecord>>;
 
 	private handler?: (message: IPayload) => Promise<any>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	private events?: Set<string>;
 
 	private window?: Window;
 
@@ -123,31 +151,39 @@ export class Controller {
 		{
 			origin,
 			handler,
+			events,
 		}: {
 			origin: string;
 			handler?: (message: IPayload) => Promise<unknown>;
+			events?: Array<string>;
 		}) {
 		this.origin = origin ? origin : window.origin;
 
 		this.callbackCounter = 0;
 		this.callbackTable = new Map();
+		this.eventListenerCounter = 0;
+		this.eventListenerTable = new Map();
 
 		this.handler = handler;
+		this.events = events ? new Set(events) : undefined;
 
 		window.addEventListener('message', this.receiveMessage, false);
 	}
 
 	public Glue({
 		features,
+		events,
 		mode,
 	}: {
 		features?: Array<string>;
+		events?: Set<string>;
 		mode?: string;
 	}): Glue {
 		const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 
 		const glue =  new Glue({
 			api,
+			events,
 			mode,
 		});
 
@@ -161,6 +197,62 @@ export class Controller {
 						}
 				}
 			}
+		}
+
+		if (events) {
+			glue.addEventListener = (type: string, listener: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
+				if (!this.eventListenerTable.has(type)) {
+					this.eventListenerTable.set(type, new Map());
+				}
+				const listeners = this.eventListenerTable.get(type) as Map<string, IGlueEventListenerRecord>;
+				const id = String(++this.eventListenerCounter);
+				listeners.set(id, {
+					listener,
+					options,
+				});
+			}
+			glue.removeEventListener = (type: string, listener?: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
+				const listeners = this.eventListenerTable.get(type);
+				if (listeners) {
+					if (listener) {
+						for (const [id, record] of listeners) {
+							if (record.listener === listener) {
+								if (!options && !record.options) {
+									listeners.delete(id);
+									continue;
+								}
+								if (options && record.options) {
+									// TODO(longsleep): What options shall we handle here?
+									listeners.delete(id);
+									continue;
+								}
+							}
+						}
+					} else {
+						this.eventListenerTable.delete(type);
+					}
+					if (!listeners.size) {
+						this.eventListenerTable.delete(type);
+					}
+				}
+			}
+		}
+
+		const dispatchableEvents = this.events;
+		if (dispatchableEvents) {
+			glue.dispatchEvent = async (event: IGlueEvent, ...args: unknown[]): Promise<boolean> => {
+				if (!dispatchableEvents.has(event.type)) {
+					throw new Error(`unknown event: ${event.type}`);
+				}
+
+				const message: IGlueEventData = {
+					event,
+					args,
+				};
+
+				await this.postMessage('event.dispatch', message);
+				return true;
+			};
 		}
 
 		return glue;
@@ -284,6 +376,32 @@ export class Controller {
 					});
 				}
 
+				break;
+			}
+
+			case 'event.dispatch': {
+				const data = message.data as IGlueEventData;
+				if (!message.callbackId) {
+					throw new Error('glue event.dispatch has no callbackId');
+				}
+				if (!data.event) {
+					throw new Error('glue event.dispatch without event');
+				}
+
+				const listeners = this.eventListenerTable.get(data.event.type);
+				if (listeners) {
+					const args = data.args ? data.args : [];
+					for (const [id, record] of listeners) {
+						if (record.options && record.options.once) {
+							listeners.delete(id);
+						}
+						record.listener(data.event, ...args);
+					}
+					if (!listeners.size) {
+						this.eventListenerTable.delete(data.event.type);
+					}
+				}
+				this.replyMessage(message.callbackId, null);
 				break;
 			}
 

@@ -56,6 +56,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
+		const events = options ? options.events : undefined;
 		const mode = options.mode ? options.mode : '';
 
 		// Create glue controller.
@@ -71,12 +72,14 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						const data = message.data as IInitData;
 						state.glue = controller.Glue({
 							features: data.features,
+							events: data.events,
 							mode,
 						});
 
 						// Add provided features.
 						const reply: IInitData = {
 							features: features ? Object.keys(features) : [],
+							events: events ? new Set(events) : undefined,
 						};
 
 						if (options && options.onBeforeInit) {
@@ -147,6 +150,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						console.debug(`glue (embed) unknown message type: ${message.type}`);
 				}
 			},
+			events,
 		});
 
 		// Create iframe.
@@ -260,6 +264,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
+		const events = options ? options.events : undefined;
 		const controller = new Controller({
 			origin: expectedOrigin ? expectedOrigin : window.origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -278,6 +283,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 						console.debug(`glue (enable) unknown message type: ${message.type}`)
 				}
 			},
+			events,
 		});
 
 		// Attach glue.
@@ -294,6 +300,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		queueMicroTask(() => {
 			const request: IInitData = {
 				features: features ? Object.keys(features) : [],
+				events: events ? new Set(events) : undefined,
 				mode,
 			}
 			controller.postMessage('init', request).then(async (initData?: IInitData): Promise<void> => {
@@ -315,6 +322,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 				// Create glue.
 				const glue = controller.Glue({
 					features: initData.features,
+					events: initData.events,
 					mode,
 				});
 

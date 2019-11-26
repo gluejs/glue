@@ -42,3 +42,8 @@ jobs:
           asset_path: ./dist/glue-${{ steps.get_version.outputs.VERSION }}.tgz
           asset_name: glue-${{ steps.get_version.outputs.VERSION }}.tgz
           asset_content_type: application/gzip
+      - uses: primer/publish@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+          args: '--dry-run'

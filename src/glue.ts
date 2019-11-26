@@ -24,6 +24,7 @@ export interface IEmbeddOptions {
 
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 
+	onFrame?: (frame: HTMLIFrameElement) => void;
 	onBeforeInit?: (glue: Glue, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 

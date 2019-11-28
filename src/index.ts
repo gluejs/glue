@@ -35,12 +35,16 @@ import {
  */
 async function embed(url: string, container: Element, options?: IEmbeddOptions): Promise<Glue> {
 	const state: {
+		hidden: boolean;
+
 		glue?: Glue;
 		beforeInitResolve?: (value?: unknown) => void;
 		beforeInitReject?: (reason?: unknown) => void;
 
 		retryTimer?: ReturnType<typeof setTimeout>;
-	} = {};
+	} = {
+		hidden: false,
+	};
 
 	return new Promise((resolve, reject) => {
 		// Add default option values and ensure options.
@@ -56,8 +60,11 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
-		const events = options ? options.events : undefined;
+		const events: Set<string> = options ? options.events ? new Set(options.events) : new Set() : new Set();
 		const mode = options.mode ? options.mode : '';
+
+		// Add built in events.
+		events.add('glue.visibilitychange');
 
 		// Create glue controller.
 		const controller = new Controller({
@@ -79,9 +86,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						// Add provided features.
 						const reply: IInitData = {
 							features: features ? Object.keys(features) : [],
-							events: events ? new Set(events) : undefined,
+							events,
 						};
 
+						// The onBeforeInit hook allows to define or modify options for the glued app.
 						if (options && options.onBeforeInit) {
 							const p = new Promise((resolve, reject) => {
 								state.beforeInitResolve = resolve;
@@ -91,18 +99,29 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 								throw new Error('glue init promise error');
 							}
 							try {
-								const action = options.onBeforeInit(state.glue, p);
-								if (action) {
-									if (!data.features || !data.features.includes(action)) {
-										state.beforeInitReject(new Error(`unsupported action: ${action}`));
-									} else {
-										reply.action = action;
-									}
+								const initOptions = options.onBeforeInit(state.glue, p);
+								if (initOptions) {
+									reply.options = {
+										...initOptions
+									};
 								}
 							} catch (err) {
 								reject(new Error(`onInit failed: ${err}`));
 								return;
 							}
+						}
+						if (!reply.options) {
+							// Ensure options are set, when not set already.
+							reply.options = {
+								...options ? options.options : {},
+							};
+						}
+						if (reply.options.hidden !== undefined) {
+							// This allows to set the initial visibility state. At the same time the
+							// value is shared early with the glued app.
+							state.hidden = !!reply.options.hidden;
+						} else {
+							reply.options.hidden = state.hidden;
 						}
 
 						return reply;
@@ -220,6 +239,11 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			}
 		});
 		append();
+	}).then((value: unknown): Glue => {
+		// Trigger final visibility state and return Glue.
+		const glue = value as Glue;
+		glue.hidden = state.hidden;
+		return glue;
 	});
 }
 
@@ -270,7 +294,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 		const features: {[key: string]: (...args: unknown[]) => unknown} = {
 			...options.features,
 		};
-		const events = options ? options.events : undefined;
+		const events = options ? options.events ? new Set(options.events): undefined : undefined;
 		const controller = new Controller({
 			origin: expectedOrigin ? expectedOrigin : window.origin,
 			handler: async (message: IPayload): Promise<any> => { /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -329,6 +353,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 				const glue = controller.Glue({
 					features: initData.features,
 					events: initData.events,
+					options: initData.options,
 					mode,
 				});
 
@@ -343,12 +368,14 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					}
 				}
 
+				const initOptions = initData.options ? initData.options : {};
+
 				// Trigger initial requested action.
-				if (readyData.ready && initData.action) {
+				if (readyData.ready && initOptions.action) {
 					// Trigger action, this action is set when initializing and it
 					// is triggered before the app reports ready.
-					if (features && features[initData.action])  {
-						const handler = features[initData.action];
+					if (features && features[initOptions.action as string])  {
+						const handler = features[initOptions.action as string];
 						try {
 							const result = await handler();
 							if (result !== undefined) {
@@ -362,7 +389,7 @@ async function enable(sourceWindow?: Window, options?: IEnableOptions): Promise<
 					} else {
 						readyData.ready = false;
 						readyData.error = true;
-						readyData.data = new Error(`unknown glue action: ${initData.action}`);
+						readyData.data = new Error(`unknown glue action: ${initOptions.action}`);
 					}
 				}
 

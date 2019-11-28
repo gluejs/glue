@@ -19,6 +19,9 @@ window.app = new Vue({
 			console.info('example mounted', this);
 			this.started = true;
 			Glue.embed('./embedded.html', this.$refs.embedded, {
+				options: {
+					action: 'embeddedFeatureWithSmallDelay',
+				},
 				className: 'app',
 				features: {
 					toggleHeaderColor: (() => {
@@ -42,7 +45,6 @@ window.app = new Vue({
 					cont.then(result => {
 						console.log('glue onInit action result', result);
 					});
-					return 'embeddedFeatureWithSmallDelay';
 				}
 			}).then(async glue => {
 				console.info('glue complete', glue.mode, glue.enabled, glue);

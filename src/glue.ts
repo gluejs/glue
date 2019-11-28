@@ -21,12 +21,13 @@ export interface IEmbeddOptions {
 
 	origin?: string;
 	mode?: string;
+	options?: {[key: string]: unknown};
 
 	features?: {[key: string]: (...args: unknown[]) => unknown};
 	events?: Array<string>;
 
 	onFrame?: (frame: HTMLIFrameElement) => void;
-	onBeforeInit?: (glue: Glue, cont: Promise<unknown>) => string | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	onBeforeInit?: (glue: Glue, cont: Promise<unknown>) => {[key: string]: unknown} | undefined; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 }
 
 export interface IEnableOptions {
@@ -52,7 +53,7 @@ export interface IInitData {
 	features?: Array<string>;
 	events?: Set<string>;
 	mode?: string;
-	action?: string;
+	options?: {[key: string]: unknown};
 	error?: boolean;
 }
 
@@ -105,7 +106,10 @@ export class Glue {
 	public readonly enabled: boolean = false;
 	public readonly api: API<{[key: string]: (...args: unknown[]) => Promise<any>}> /* eslint-disable-line @typescript-eslint/no-explicit-any */
 	public readonly events: Array<string>;
+	public readonly options: {[key: string]: unknown};
 	public readonly mode?: string;
+
+	public hidden = false; /* Default value, only used when the glue on the other has no support. */
 
 	public dispatchEvent?: (event: IGlueEvent, ...args: unknown[]) => Promise<boolean>;
 	public addEventListener?: (type: string, listener: (...args: unknown[]) => void, options?: AddEventListenerOptions) => void;
@@ -115,11 +119,13 @@ export class Glue {
 		{
 			api,
 			events,
+			options,
 			mode,
 		}: {
 			api?: API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 			events?: Set<string>;
 			mode?: string;
+			options?: {[key: string]: unknown};
 		}) {
 		this.enabled = api !== undefined;
 		if (api === undefined) {
@@ -127,6 +133,7 @@ export class Glue {
 		}
 		this.api = api;
 		this.events = events ? Array.from(events) : [];
+		this.options = options ? options : {};
 		this.mode = mode;
 	}
 }
@@ -155,7 +162,7 @@ export class Controller {
 		}: {
 			origin: string;
 			handler?: (message: IPayload) => Promise<unknown>;
-			events?: Array<string>;
+			events?: Set<string>;
 		}) {
 		this.origin = origin ? origin : window.origin;
 
@@ -165,18 +172,20 @@ export class Controller {
 		this.eventListenerTable = new Map();
 
 		this.handler = handler;
-		this.events = events ? new Set(events) : undefined;
+		this.events = events;
 
-		window.addEventListener('message', this.receiveMessage, false);
+		window.addEventListener('message', this.handleMessageEvent, false);
 	}
 
 	public Glue({
 		features,
 		events,
+		options,
 		mode,
 	}: {
 		features?: Array<string>;
 		events?: Set<string>;
+		options?: {[key: string]: unknown};
 		mode?: string;
 	}): Glue {
 		const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
@@ -184,6 +193,7 @@ export class Controller {
 		const glue =  new Glue({
 			api,
 			events,
+			options,
 			mode,
 		});
 
@@ -199,18 +209,19 @@ export class Controller {
 			}
 		}
 
-		if (events) {
-			glue.addEventListener = (type: string, listener: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
-				if (!this.eventListenerTable.has(type)) {
-					this.eventListenerTable.set(type, new Map());
-				}
-				const listeners = this.eventListenerTable.get(type) as Map<string, IGlueEventListenerRecord>;
-				const id = String(++this.eventListenerCounter);
-				listeners.set(id, {
-					listener,
-					options,
-				});
+		const addEventListener = (type: string, listener: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
+			if (!this.eventListenerTable.has(type)) {
+				this.eventListenerTable.set(type, new Map());
 			}
+			const listeners = this.eventListenerTable.get(type) as Map<string, IGlueEventListenerRecord>;
+			const id = String(++this.eventListenerCounter);
+			listeners.set(id, {
+				listener,
+				options,
+			});
+		}
+		if (events) {
+			glue.addEventListener = addEventListener;
 			glue.removeEventListener = (type: string, listener?: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
 				const listeners = this.eventListenerTable.get(type);
 				if (listeners) {
@@ -239,20 +250,52 @@ export class Controller {
 		}
 
 		const dispatchableEvents = this.events;
-		if (dispatchableEvents) {
-			glue.dispatchEvent = async (event: IGlueEvent, ...args: unknown[]): Promise<boolean> => {
-				if (!dispatchableEvents.has(event.type)) {
-					throw new Error(`unknown event: ${event.type}`);
-				}
+		const dispatchEvent = async (event: IGlueEvent, ...args: unknown[]): Promise<boolean> => {
+			if (!dispatchableEvents || !dispatchableEvents.has(event.type)) {
+				throw new Error(`unknown event: ${event.type}`);
+			}
 
-				const message: IGlueEventData = {
-					event,
-					args,
-				};
-
-				await this.postMessage('event.dispatch', message);
-				return true;
+			const message: IGlueEventData = {
+				event,
+				args,
 			};
+
+			await this.postMessage('event.dispatch', message);
+			return true;
+		};
+		if (dispatchableEvents) {
+			glue.dispatchEvent = dispatchEvent;
+		}
+
+		if (this.events && this.events.has('glue.visibilitychange')) {
+			// NOTE(longsleep): visibilityState can be changed when .embed().
+			let visibilityState = 'prerender';
+			Object.defineProperty(glue, 'hidden', {
+				get: (): boolean => {
+					return visibilityState !== 'visible';
+				},
+				set: (value: boolean): void => {
+					const n = value ? 'hidden' : 'visible';
+					if (n !== visibilityState) {
+						visibilityState = n;
+						dispatchEvent({
+							type: 'glue.visibilitychange',
+						}, visibilityState);
+					}
+				}
+			});
+		}
+		if (events && events.has('glue.visibilitychange')) {
+			// NOTE(longsleep): visibilityState is readonly when .enable().
+			let visibilityState = 'prerender';
+			Object.defineProperty(glue, 'hidden', {
+				get: (): boolean => {
+					return visibilityState !== 'visible';
+				},
+			});
+			addEventListener('glue.visibilitychange', ((event: unknown, value: unknown): void => {
+				visibilityState = String(value);
+			}));
 		}
 
 		return glue;
@@ -292,7 +335,7 @@ export class Controller {
 		});
 	}
 
-	public receiveMessage = (event: MessageEvent): void => {
+	private handleMessageEvent = (event: MessageEvent): void => {
 		if (event.source !== this.window) {
 			return;
 		}
@@ -310,7 +353,7 @@ export class Controller {
 		this.handleMessage(message);
 	}
 
-	public callAction = async (action: string, args: unknown[]): Promise<unknown> => {
+	private callAction = async (action: string, args: unknown[]): Promise<unknown> => {
 		const message: ICallData = {
 			action,
 			args,

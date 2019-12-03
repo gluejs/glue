@@ -37,6 +37,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 	const state: {
 		hidden: boolean;
 
+		frame?: HTMLIFrameElement;
 		glue?: Glue;
 		beforeInitResolve?: (value?: unknown) => void;
 		beforeInitReject?: (reason?: unknown) => void;
@@ -62,6 +63,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		};
 		const events: Set<string> = options ? options.events ? new Set(options.events) : new Set() : new Set();
 		const mode = options.mode ? options.mode : '';
+
+		// Create iframe.
+		const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
+		const frame = ownerDocument.createElement('iframe');
 
 		// Add built in events.
 		events.add('glue.visibilitychange');
@@ -170,12 +175,16 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 						console.debug(`glue (embed) unknown message type: ${message.type}`);
 				}
 			},
+			destructor: async (): Promise<void> => {
+				if (state.frame && state.frame === frame) {
+					container.removeChild(frame);
+					state.frame = undefined;
+				}
+			},
 			events,
 		});
 
-		// Create iframe.
-		const ownerDocument = container.ownerDocument !== null ? container.ownerDocument : document;
-		const frame = ownerDocument.createElement('iframe');
+		// Add iframe details.
 		if (options && options.className) {
 			frame.className = options.className;
 		}
@@ -190,6 +199,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 				frame.setAttribute(key, value);
 			});
 		}
+		state.frame = frame;
 
 		// Prepare URL and set it to element.
 		setGlueParameter(src, 'mode', mode);
@@ -205,6 +215,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 
 		// Append iframe with timeout and retry.
 		const append = (): void => {
+			if (frame !== state.frame) {
+				return;
+			}
+
 			frame.setAttribute('src', src.toString());
 
 			// Inject iframe and attach glue.
@@ -215,6 +229,10 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 			controller.attach(frame.contentWindow);
 		}
 		const retry = (): void => {
+			if (frame !== state.frame) {
+				return;
+			}
+
 			controller.detach();
 			container.removeChild(frame);
 			setTimeout(() => {
@@ -242,6 +260,16 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		const glue = value as Glue;
 		glue.hidden = state.hidden;
 		return glue;
+	}).catch(async reason => {
+		if (state.glue && state.glue.destroy) {
+			await state.glue.destroy();
+		} else {
+			if (state.frame) {
+				container.removeChild(state.frame);
+				state.frame = undefined;
+			}
+		}
+		throw reason;
 	});
 }
 

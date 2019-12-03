@@ -71,5 +71,13 @@ window.app = new Vue({
 				});
 			}
 		},
+		destroy: function() {
+			if (this.glue) {
+				this.glue.destroy();
+				this.glue = null;
+				this.started = false;
+				this.ready = false;
+			}
+		}
 	},
 });

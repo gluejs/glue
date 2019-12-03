@@ -30,6 +30,7 @@
 			<div class="buttons">
 				<button class="button is-primary" v-on:click="start" :disabled="started">Start</button>
 				<button class="button is-warning" v-on:click="okOrCancel" :disabled="!started || !glue || ready">Ok or Cancel</button>
+				<button class="button is-secondary" v-on:click="destroy" :disabled="!glue">Destroy</button>
 			</div>
 		</div>
 	</nav>

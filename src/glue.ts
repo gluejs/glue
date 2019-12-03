@@ -114,6 +114,7 @@ export class Glue {
 	public dispatchEvent?: (event: IGlueEvent, ...args: unknown[]) => Promise<boolean>;
 	public addEventListener?: (type: string, listener: (...args: unknown[]) => void, options?: AddEventListenerOptions) => void;
 	public removeEventListener?: (type: string, listener: (...args: unknown[]) => void, options?: AddEventListenerOptions) => void;
+	public destroy?: () => Promise<void>;
 
 	public constructor(
 		{
@@ -127,7 +128,6 @@ export class Glue {
 			mode?: string;
 			options?: {[key: string]: unknown};
 		}) {
-		this.enabled = api !== undefined;
 		if (api === undefined) {
 			api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
 		}
@@ -150,18 +150,22 @@ export class Controller {
 	private eventListenerTable: Map<string, Map<string, IGlueEventListenerRecord>>;
 
 	private handler?: (message: IPayload) => Promise<any>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+	private destructor?: () => Promise<void>;
 	private events?: Set<string>;
 
 	private window?: Window;
+	private destroyed?: boolean;
 
 	public constructor(
 		{
 			origin,
 			handler,
+			destructor,
 			events,
 		}: {
 			origin: string;
 			handler?: (message: IPayload) => Promise<unknown>;
+			destructor?: () => Promise<void>;
 			events?: Set<string>;
 		}) {
 		this.origin = origin ? origin : window.origin;
@@ -172,6 +176,7 @@ export class Controller {
 		this.eventListenerTable = new Map();
 
 		this.handler = handler;
+		this.destructor = destructor;
 		this.events = events;
 
 		window.addEventListener('message', this.handleMessageEvent, false);
@@ -189,6 +194,11 @@ export class Controller {
 		mode?: string;
 	}): Glue {
 		const api = {} as API<{[key: string]: (...args: unknown[]) => Promise<any>}>; /* eslint-disable-line @typescript-eslint/no-explicit-any */
+
+		const state = {
+			visibilityState: 'prerender',
+			enabled: api !== undefined,
+		};
 
 		const glue =  new Glue({
 			api,
@@ -209,7 +219,35 @@ export class Controller {
 			}
 		}
 
+		Object.defineProperty(glue, 'enabled', {
+			get: (): boolean => {
+				return state.enabled && !this.destroyed;
+			},
+		});
+
+
+		glue.destroy = async (): Promise<void> => {
+			if (this.destroyed) {
+				return;
+			}
+
+			if (this.destructor) {
+				await this.destructor();
+			}
+
+			window.removeEventListener('message', this.handleMessageEvent, false);
+
+			this.destroyed = true;
+			this.eventListenerTable.clear();
+			this.callbackTable.clear();
+			this.detach();
+		}
+
 		const addEventListener = (type: string, listener: (...args: unknown[]) => void, options?: EventListenerOptions): void => {
+			if (this.destroyed) {
+				throw new Error('glue is destroyed');
+			}
+
 			if (!this.eventListenerTable.has(type)) {
 				this.eventListenerTable.set(type, new Map());
 			}
@@ -251,6 +289,9 @@ export class Controller {
 
 		const dispatchableEvents = this.events;
 		const dispatchEvent = async (event: IGlueEvent, ...args: unknown[]): Promise<boolean> => {
+			if (this.destroyed) {
+				throw new Error('glue is destroyed');
+			}
 			if (!dispatchableEvents || !dispatchableEvents.has(event.type)) {
 				throw new Error(`unknown event: ${event.type}`);
 			}
@@ -269,32 +310,30 @@ export class Controller {
 
 		if (this.events && this.events.has('glue.visibilitychange')) {
 			// NOTE(longsleep): visibilityState can be changed when .embed().
-			let visibilityState = 'prerender';
 			Object.defineProperty(glue, 'hidden', {
 				get: (): boolean => {
-					return visibilityState !== 'visible';
+					return state.visibilityState !== 'visible';
 				},
 				set: (value: boolean): void => {
 					const n = value ? 'hidden' : 'visible';
-					if (n !== visibilityState) {
-						visibilityState = n;
+					if (n !== state.visibilityState) {
+						state.visibilityState = n;
 						dispatchEvent({
 							type: 'glue.visibilitychange',
-						}, visibilityState);
+						}, state.visibilityState);
 					}
 				}
 			});
 		}
 		if (events && events.has('glue.visibilitychange')) {
 			// NOTE(longsleep): visibilityState is readonly when .enable().
-			let visibilityState = 'prerender';
 			Object.defineProperty(glue, 'hidden', {
 				get: (): boolean => {
-					return visibilityState !== 'visible';
+					return state.visibilityState !== 'visible';
 				},
 			});
 			addEventListener('glue.visibilitychange', ((event: unknown, value: unknown): void => {
-				visibilityState = String(value);
+				state.visibilityState = String(value);
 			}));
 		}
 
@@ -302,6 +341,9 @@ export class Controller {
 	}
 
 	public attach(glueWindow: Window): void {
+		if (this.destroyed) {
+			throw new Error('glue is destroyed');
+		}
 		if (this.window !== undefined) {
 			throw new Error('glue already attached');
 		}

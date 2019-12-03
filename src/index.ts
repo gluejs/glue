@@ -233,8 +233,6 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 							retry();
 						}
 					}, options.timeout);
-				} else {
-					reject(new Error('glue timeout'));
 				}
 			}
 		});

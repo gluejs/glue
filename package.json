@@ -1,9 +1,10 @@
 {
-  "name": "glue",
-  "description": "Glue Javascript library",
+  "name": "@gluejs/glue",
+  "description": "JavaScript library for easy integration of independent web applications",
   "author": "Kopano b.v. <info@kopano.com>",
+  "homepage": "https://github.com/gluejs/glue",
   "license": "MIT",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "main": "umd/glue.js",
   "types": "umd/src/index.d.ts",
   "files": [

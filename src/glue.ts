@@ -381,7 +381,7 @@ export class Controller {
 		if (event.source !== this.window) {
 			return;
 		}
-		if (event.origin !== this.origin) {
+		if (event.origin !== "null" && event.origin !== this.origin) {
 			return;
 		}
 		const message = event.data as IPayload;
@@ -392,7 +392,7 @@ export class Controller {
 			throw new Error(`glue versions incompatible: ${message.v} != ${API_VERSION}`);
 		}
 
-		this.handleMessage(message);
+		this.handleMessage(message, event.origin);
 	}
 
 	private callAction = async (action: string, args: unknown[]): Promise<unknown> => {
@@ -411,7 +411,7 @@ export class Controller {
 		this.postMessage('callback', message);
 	}
 
-	private handleMessage = (message: IPayload): void => {
+	private handleMessage = (message: IPayload, origin: string): void => {
 		switch (message.type) {
 			case 'init': {
 				const data = message.data as IInitData;
@@ -419,7 +419,14 @@ export class Controller {
 					throw new Error('glue init has no callbackId');
 				}
 
-				console.debug('glue initialized', data.features);
+				if (origin === 'null') {
+					// If the message origin is 'null', we are getting a message
+					// from a sandboxed iframe. It was already matched to be
+					// from our expected window, so should be secure enough to
+					// allow it as target origin for all further messages.
+					this.origin = '*';
+				}
+				console.debug('glue initialized', data.features, this.origin);
 
 				if (!this.handler) {
 					return;

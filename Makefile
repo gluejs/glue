@@ -20,7 +20,7 @@ all: vendor | glue docs
 
 .PHONY: glue
 glue: vendor ; $(info building $@ ...) @
-	BUILD_VERSION=$(VERSION) BUILD_DATE=$(DATE) TARGET=$(TARGET) $(YARN) webpack --display-error-details --color --mode=production
+	NODE_OPTIONS="--openssl-legacy-provider" BUILD_VERSION=$(VERSION) BUILD_DATE=$(DATE) TARGET=$(TARGET) $(YARN) webpack --display-error-details --color --mode=production
 	echo $(VERSION) > .version
 
 .PHONY: glue-es5
@@ -33,7 +33,7 @@ glue-es6: glue
 
 .PHONY: glue-dev
 glue-dev: vendor ; $(info building and watching $@ ...) @
-	TARGET=$(TARGET) $(YARN) webpack --display-error-details --progress --color --mode=development --watch
+	NODE_OPTIONS="--openssl-legacy-provider" TARGET=$(TARGET) $(YARN) webpack --display-error-details --progress --color --mode=development --watch
 
 .PHONY: docs
 docs: vendor ; $(info building $@ ...) @

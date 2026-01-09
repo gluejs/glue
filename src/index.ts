@@ -51,8 +51,8 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 		// Add default option values and ensure options.
 		options = {
 			timeout: 5000,
-			sandboxRestrictions: 'allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin',
-			featurePolicy: 'animations; autoplay; camera; encrypted-media; fullscreen; geolocation; microphone; speaker; vr',
+			sandboxRestrictions: 'allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts',
+			featurePolicy: 'autoplay; camera; encrypted-media; fullscreen; geolocation; microphone',
 			...options,
 		}
 
@@ -203,7 +203,7 @@ async function embed(url: string, container: Element, options?: IEmbeddOptions):
 
 		// Prepare URL and set it to element.
 		setGlueParameter(src, 'mode', mode);
-		if (origin !== window.origin) {
+		if (origin !== window.origin || options.sandboxRestrictions) {
 			// Cross origin, add glue origin hash parameter to allow white list
 			// checks on the other end.
 			setGlueParameter(src, 'origin', window.origin);

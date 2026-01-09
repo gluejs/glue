@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Run linter
+      run: make lint
+
+    - name: Build library
+      run: make
+      env:
+        NODE_OPTIONS: --openssl-legacy-provider
+
+    - name: Check build artifacts
+      run: |
+        ls -lh umd/
+        test -f umd/glue.js
+        test -f umd/glue.js.map
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: matrix.node-version == '16.x'
+      with:
+        name: build-artifacts
+        path: |
+          umd/
+          .version
+          NOTICES.txt
+          LICENSE.txt
+        retention-days: 30
+
+    - name: Upload documentation
+      uses: actions/upload-artifact@v4
+      if: matrix.node-version == '16.x'
+      with:
+        name: documentation
+        path: docs/
+        retention-days: 30

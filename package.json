@@ -4,7 +4,7 @@
   "author": "Kopano b.v. <info@kopano.com>",
   "homepage": "https://github.com/gluejs/glue",
   "license": "MIT",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "main": "umd/glue.js",
   "types": "umd/src/index.d.ts",
   "files": [
